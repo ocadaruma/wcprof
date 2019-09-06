@@ -4,6 +4,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"io"
 	"math"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -46,6 +47,10 @@ func (registry *Registry) Write(w io.Writer) {
 			formatDuration(row.avg),
 		})
 	}
+}
+
+func (registry *Registry) Print() {
+	registry.Write(os.Stdout)
 }
 
 type Timer struct {
