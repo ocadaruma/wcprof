@@ -2,9 +2,9 @@ package example
 
 import "fmt"
 
+// wcprof: MARKED
 // abc
 func PublicTest1() {
-	defer func(timer *wcprof.Timer) { timer.Stop() }(wcprof.NewTimer())
 
 	// de
 	fmt.Println("hello~~~")
