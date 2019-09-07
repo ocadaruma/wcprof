@@ -1,8 +1,7 @@
-package main
+package wcprof
 
 import (
 	"flag"
-	"github.com/ocadaruma/wcprof"
 	"os"
 )
 
@@ -17,7 +16,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	config := wcprof.Config{Backup: *backup}
+	config := Config{Backup: *backup}
 
-	wcprof.InterceptTimer(*path, &config)
+	InterceptTimer(*path, &config)
 }

@@ -1,23 +1,31 @@
 package example
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
-// wcprof: MARKED
-// abc
-func PublicTest1() {
+// Timer will not be installed to this func
+// wcprof: OFF
+func privateFunc1() {
+	time.Sleep(100 * time.Millisecond)
 
-	// de
-	fmt.Println("hello~~~")
+	fmt.Println("took 100ms")
 }
 
-func publicTest2() {
-	//e
-	fmt.Println("world~~~")
+func PublicFunc2() {
+	fmt.Println("func2 start")
 
-	//g
+	for i := 0; i < 10; i++ {
+		privateFunc1()
+	}
+
+	fmt.Println("took 1000ms")
 }
 
-// d
-func publicTest3() {
+func PublicFunc3() {
 
+	time.Sleep(300 * time.Millisecond)
+
+	fmt.Println("took 300ms")
 }

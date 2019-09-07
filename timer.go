@@ -11,8 +11,8 @@ import (
 )
 
 type Registry struct {
-	mu *sync.Mutex
-	samples map[string]*Sample
+	mu    *sync.Mutex
+	stats map[string]*Stat
 }
 
 var defaultRegistry *Registry
@@ -21,7 +21,8 @@ var enabled bool
 
 func init() {
 	defaultRegistry = &Registry{
-		mu: &sync.Mutex{},
+		mu:    &sync.Mutex{},
+		stats: make(map[string]*Stat),
 	}
 
 	enabled = os.Getenv("WCPROF_OFF") == ""
@@ -55,6 +56,8 @@ func (registry *Registry) Write(w io.Writer) {
 			formatDuration(row.avg),
 		})
 	}
+
+	writer.Render()
 }
 
 func (registry *Registry) Print() {
@@ -67,7 +70,7 @@ type Timer struct {
 	End time.Time
 }
 
-type Sample struct {
+type Stat struct {
 	ID string
 	Count int
 	Sum   time.Duration
@@ -95,9 +98,9 @@ func (timer *Timer) Stop() {
 	timer.End = time.Now()
 
 	defaultRegistry.mu.Lock()
-	sample, ok := defaultRegistry.samples[timer.ID]
+	stat, ok := defaultRegistry.stats[timer.ID]
 	if !ok {
-		sample = &Sample{
+		stat = &Stat{
 			ID:    timer.ID,
 			Count: 0,
 			Sum:   0,
@@ -108,17 +111,17 @@ func (timer *Timer) Stop() {
 	}
 	duration := timer.End.Sub(timer.Start)
 
-	sample.Count++
-	sample.Sum += duration
+	stat.Count++
+	stat.Sum += duration
 
-	if duration < sample.Min {
-		sample.Min = duration
+	if duration < stat.Min {
+		stat.Min = duration
 	}
-	if duration > sample.Max {
-		sample.Max = duration
+	if duration > stat.Max {
+		stat.Max = duration
 	}
-	sample.Avg = sample.Sum / time.Duration(sample.Count)
-	defaultRegistry.samples[timer.ID] = sample
+	stat.Avg = stat.Sum / time.Duration(stat.Count)
+	defaultRegistry.stats[timer.ID] = stat
 
 	defaultRegistry.mu.Unlock()
 }
@@ -138,13 +141,13 @@ type result struct {
 func (registry *Registry) aggregate() *result {
 	rows := make(map[string]*resultRow)
 
-	for id, sample := range registry.samples {
+	for id, stat := range registry.stats {
 		rows[id] = &resultRow{
-			count: sample.Count,
-			sum: sample.Sum,
-			max: sample.Max,
-			min: sample.Min,
-			avg: sample.Avg,
+			count: stat.Count,
+			sum:   stat.Sum,
+			max:   stat.Max,
+			min:   stat.Min,
+			avg:   stat.Avg,
 		}
 	}
 
