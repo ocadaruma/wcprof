@@ -59,7 +59,7 @@ func SomeHandler(w http.ResponseWriter, r *http.Request) {
 
 Run your application and collect stats.
 
-You can disable timer by environmental variable of calling `wcprof.Off()`.
+You can disable timer by environmental variable or calling `wcprof.Off()`.
 
 ```
 WCPROF_OFF=1 go run your-app
