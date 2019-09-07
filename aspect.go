@@ -38,19 +38,25 @@ func InjectTimer(filepath string, config *Config) {
 	}
 
 	fileset := token.NewFileSet()
-	pkgs, err := decorator.ParseDir(fileset, filepath, config.Filter, parser.ParseComments)
+
+	// actual file parsing is done by dst below
+	pkgs, err := parser.ParseDir(fileset, filepath, config.Filter, parser.PackageClauseOnly)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, pkg := range pkgs {
-		dec := decorator.NewDecoratorWithImports(fileset, pkg.Name, goast.New())
+		decor := decorator.NewDecoratorWithImports(fileset, pkg.Name, goast.New())
 		restorer := decorator.NewRestorerWithImports(pkg.Name, guess.New())
 
 		for filename, _ := range pkg.Files {
-			dFile, _ := dec.ParseFile(filename, nil, parser.ParseComments)
-			applied := dstutil.Apply(dFile, nil, func(cursor *dstutil.Cursor) bool {
+			file, err := decor.ParseFile(filename, nil, parser.ParseComments)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			applied := dstutil.Apply(file, nil, func(cursor *dstutil.Cursor) bool {
 				if f, ok := cursor.Node().(*dst.FuncDecl); ok {
 					marked := false
 					if f.Decorations() != nil {
@@ -71,7 +77,7 @@ func InjectTimer(filepath string, config *Config) {
 				return true
 			}).(*dst.File)
 
-			err := writeAstToFile(filename, restorer, applied)
+			err = writeAstToFile(filename, restorer, applied)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -142,13 +148,4 @@ func writeAstToFile(filename string, restorer *decorator.Restorer, file *dst.Fil
 		return err
 	}
 	return restorer.Fprint(out, file)
-	//return decorator.Fprint(out, file)
 }
-
-//func writeAstToFile(filename string, file *dst.File) error {
-//	out, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0666)
-//	if err != nil {
-//		return err
-//	}
-//	return decorator.Fprint(out, file)
-//}
