@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -46,9 +47,9 @@ func (registry *Registry) Write(w io.Writer) {
 	writer.SetAutoFormatHeaders(false)
 	writer.SetAlignment(tablewriter.ALIGN_RIGHT)
 
-	for id, row := range result.rows {
+	for _, row := range result.rows {
 		writer.Append([]string{
-			id,
+			row.id,
 			strconv.Itoa(row.count),
 			formatDuration(row.sum),
 			formatDuration(row.max),
@@ -127,6 +128,7 @@ func (timer *Timer) Stop() {
 }
 
 type resultRow struct {
+	id    string
 	count int
 	sum   time.Duration
 	max   time.Duration
@@ -135,21 +137,26 @@ type resultRow struct {
 }
 
 type result struct {
-	rows map[string]*resultRow
+	rows []*resultRow
 }
 
 func (registry *Registry) aggregate() *result {
-	rows := make(map[string]*resultRow)
+	var rows []*resultRow
 
 	for id, stat := range registry.stats {
-		rows[id] = &resultRow{
+		rows = append(rows, &resultRow{
+			id   : id,
 			count: stat.Count,
 			sum:   stat.Sum,
 			max:   stat.Max,
 			min:   stat.Min,
 			avg:   stat.Avg,
-		}
+		})
 	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].sum > rows[j].sum
+	})
 
 	return &result{rows: rows}
 }

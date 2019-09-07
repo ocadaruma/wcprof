@@ -6,9 +6,15 @@ A wall-clock based simple profiler.
 
 ## installation
 
+#### wcprof command
+
 ```
-$ go get github.com/ocadaruma/wcprof
+$ go get github.com/ocadaruma/wcprof/cmd/wcprof
 ```
+
+#### wcprof library
+
+Add `github.com/ocadaruma/wcprof` to your go project.
 
 ## Usage
 
