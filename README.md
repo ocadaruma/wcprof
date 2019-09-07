@@ -1,10 +1,19 @@
 # wcprof
 
-A wall-clock based simple profiler.
+A wall-clock based simple function profiler.
 
 `wcprof` parses your go source then install timer to all functions (except function literals).
 
-## installation
+```
++--------------------------+-------+-------------+------------+------------+------------+
+|           Name           | count |   sum(ms)   |  max(ms)   |  min(ms)   |  avg(ms)   |
++--------------------------+-------+-------------+------------+------------+------------+
+| main/cpuIntensiveHandler |    33 | 3732.827265 | 242.233016 |  89.352146 | 113.115977 |
+|     main/blockingHandler |     3 | 1515.822732 | 507.925529 | 502.406221 | 505.274244 |
++--------------------------+-------+-------------+------------+------------+------------+
+```
+
+## Installation
 
 #### wcprof command
 
