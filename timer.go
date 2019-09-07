@@ -12,19 +12,27 @@ import (
 
 type Registry struct {
 	mu *sync.Mutex
-	samples []*Timer
+	samples map[string]*Sample
 }
 
 var defaultRegistry *Registry
+
+var enabled bool
 
 func init() {
 	defaultRegistry = &Registry{
 		mu: &sync.Mutex{},
 	}
+
+	enabled = os.Getenv("WCPROF_OFF") == ""
 }
 
 func DefaultRegistry() *Registry {
 	return defaultRegistry
+}
+
+func Off() {
+	enabled = false
 }
 
 func (registry *Registry) Write(w io.Writer) {
@@ -59,7 +67,20 @@ type Timer struct {
 	End time.Time
 }
 
+type Sample struct {
+	ID string
+	Count int
+	Sum   time.Duration
+	Max   time.Duration
+	Min   time.Duration
+	Avg   time.Duration
+}
+
 func NewTimer(id string) *Timer {
+	if !enabled {
+		return nil
+	}
+
 	timer := &Timer{
 		ID:    id,
 		Start: time.Now(),
@@ -68,10 +89,37 @@ func NewTimer(id string) *Timer {
 }
 
 func (timer *Timer) Stop() {
+	if !enabled {
+		return
+	}
 	timer.End = time.Now()
 
 	defaultRegistry.mu.Lock()
-	defaultRegistry.samples = append(defaultRegistry.samples, timer)
+	sample, ok := defaultRegistry.samples[timer.ID]
+	if !ok {
+		sample = &Sample{
+			ID:    timer.ID,
+			Count: 0,
+			Sum:   0,
+			Max:   0,
+			Min:   math.MaxInt64,
+			Avg:   0,
+		}
+	}
+	duration := timer.End.Sub(timer.Start)
+
+	sample.Count++
+	sample.Sum += duration
+
+	if duration < sample.Min {
+		sample.Min = duration
+	}
+	if duration > sample.Max {
+		sample.Max = duration
+	}
+	sample.Avg = sample.Sum / time.Duration(sample.Count)
+	defaultRegistry.samples[timer.ID] = sample
+
 	defaultRegistry.mu.Unlock()
 }
 
@@ -90,26 +138,16 @@ type result struct {
 func (registry *Registry) aggregate() *result {
 	rows := make(map[string]*resultRow)
 
-	for _, timer := range registry.samples {
-		duration := timer.End.Sub(timer.Start)
-
-		row, ok := rows[timer.ID];
-		if !ok {
-			row = &resultRow{
-				min: math.MaxInt64,
-			}
+	for id, sample := range registry.samples {
+		rows[id] = &resultRow{
+			count: sample.Count,
+			sum: sample.Sum,
+			max: sample.Max,
+			min: sample.Min,
+			avg: sample.Avg,
 		}
-
-		row.count++
-		row.sum += duration
-		if duration < row.min {
-			row.min = duration
-		}
-		if duration > row.max {
-			row.max = duration
-		}
-		row.avg = row.sum / time.Duration(row.count)
 	}
+
 	return &result{rows: rows}
 }
 

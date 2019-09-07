@@ -8,10 +8,12 @@ import (
 	"github.com/dave/dst/dstutil"
 	"go/parser"
 	"go/token"
+	"io"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -32,7 +34,7 @@ var DefaultConfig = &Config{
 	Backup: false,
 }
 
-func InjectTimer(filepath string, config *Config) {
+func InterceptTimer(filepath string, config *Config) {
 	if config == nil {
 		config = DefaultConfig
 	}
@@ -56,6 +58,7 @@ func InjectTimer(filepath string, config *Config) {
 				log.Fatal(err)
 			}
 
+			modified := false
 			applied := dstutil.Apply(file, nil, func(cursor *dstutil.Cursor) bool {
 				if f, ok := cursor.Node().(*dst.FuncDecl); ok {
 					marked := false
@@ -71,21 +74,26 @@ func InjectTimer(filepath string, config *Config) {
 					if !marked {
 						f.Decs.Start.Append(Marker)
 						f.Body.List = append([]dst.Stmt{timerDefer(pkg.Name, f.Name.Name)}, f.Body.List...)
+						modified = true
 					}
 				}
 
 				return true
 			}).(*dst.File)
 
-			err = writeAstToFile(filename, restorer, applied)
-			if err != nil {
-				log.Fatal(err)
+			if modified {
+				err = writeAstToFile(filename, restorer, applied, config.Backup)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}
 }
 
-// func(t *wcprof.Timer){ t.Stop() }(wcprof.NewTimer("pkg/func name"))
+// Generate AST that measuring method execution time
+// Actual code look like this:
+//   func(t *wcprof.Timer){ t.Stop() }(wcprof.NewTimer("pkg/func name"))
 func timerDefer(pkg, funcName string) *dst.DeferStmt {
 	return &dst.DeferStmt{
 		Call: &dst.CallExpr{
@@ -142,7 +150,27 @@ func timerDefer(pkg, funcName string) *dst.DeferStmt {
 	}
 }
 
-func writeAstToFile(filename string, restorer *decorator.Restorer, file *dst.File) error {
+func writeAstToFile(filename string, restorer *decorator.Restorer, file *dst.File, backup bool) error {
+	if backup {
+		backupfile := filename + "_" + time.Now().Format("20060102150405")
+		src, err := os.Open(filename)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer src.Close()
+
+		dest, err := os.Create(backupfile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer dest.Close()
+
+		_, err = io.Copy(dest, src)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	out, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
