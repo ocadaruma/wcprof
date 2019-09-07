@@ -2,11 +2,12 @@ package wcprof
 
 import (
 	"fmt"
+	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
+	"github.com/dave/dst/dstutil"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
-	"golang.org/x/tools/go/ast/astutil"
 	"log"
 	"os"
 	"strconv"
@@ -14,26 +15,43 @@ import (
 )
 
 const (
+	WcprofPkg    = "github.com/ocadaruma/wcprof"
 	Marker       = "// wcprof: MARKED"
 	MarkerOff    = "// wcprof: OFF"
-	ExprProfile  = "func(timer *wcprof.Timer){ timer.Stop() }(wcprof.NewTimer(%s))"
+	ExprProfile  = "func(t *wcprof.Timer){ t.Stop() }(wcprof.NewTimer(%s))"
 )
 
-func InjectTimer(filepath string) {
+type Config struct {
+	Filter func(file os.FileInfo) bool
+	Backup bool
+}
+
+var DefaultConfig = &Config{
+	Filter: func(file os.FileInfo) bool {
+		return !strings.HasSuffix(file.Name(), "test.go")
+	},
+	Backup: false,
+}
+
+func InjectTimer(filepath string, config *Config) {
+	if config == nil {
+		config = DefaultConfig
+	}
+
 	fileset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fileset, filepath, nil, parser.ParseComments)
+	pkgs, err := decorator.ParseDir(fileset, filepath, config.Filter, parser.ParseComments)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, pkg := range pkgs {
 		for filename, file := range pkg.Files {
-			ast.Inspect(file, func(node ast.Node) bool {
-				if f, ok := node.(*ast.FuncDecl); ok {
+			applied := dstutil.Apply(file, nil, func(cursor *dstutil.Cursor) bool {
+				if f, ok := cursor.Node().(*dst.FuncDecl); ok {
 					marked := false
-					if f.Doc != nil {
-						for _, doc := range f.Doc.List {
-							if strings.Contains(doc.Text, Marker) || strings.Contains(doc.Text, MarkerOff) {
+					if f.Decorations() != nil {
+						for _, dec := range f.Decorations().Start {
+							if strings.Contains(dec, Marker) || strings.Contains(dec, MarkerOff) {
 								marked = true
 								break
 							}
@@ -41,23 +59,21 @@ func InjectTimer(filepath string) {
 					}
 
 					if !marked {
-						if f.Doc == nil {
-							f.Doc = &ast.CommentGroup{}
-						}
-						f.Doc.List = append(f.Doc.List, &ast.Comment{Text: Marker})
+						f.Decs.Start.Append(Marker)
+
 						deferExpr, _ := parser.ParseExpr(
 							fmt.Sprintf(ExprProfile, strconv.Quote(pkg.Name + "/" + f.Name.Name)))
 						deferStmt := ast.DeferStmt{Call: deferExpr.(*ast.CallExpr)}
+						decoratedDefer, _ := decorator.Decorate(fileset, &deferStmt)
 
-						f.Body.List = append([]ast.Stmt{&deferStmt}, f.Body.List...)
+						f.Body.List = append([]dst.Stmt{decoratedDefer.(*dst.DeferStmt)}, f.Body.List...)
 					}
 				}
+
 				return true
-			})
+			}).(*dst.File)
 
-			astutil.AddImport(fileset, file, "github.com/ocadaruma/wcprof")
-
-			err := writeAstToFile(filename, fileset, file)
+			err := writeAstToFile(filename, applied)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -65,10 +81,10 @@ func InjectTimer(filepath string) {
 	}
 }
 
-func writeAstToFile(filename string, fileset *token.FileSet, file *ast.File) error {
+func writeAstToFile(filename string, file *dst.File) error {
 	out, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
-	return format.Node(out, fileset, file)
+	return decorator.Fprint(out, file)
 }
