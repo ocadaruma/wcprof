@@ -1,4 +1,4 @@
-package wcprof
+package main
 
 import (
 	"github.com/dave/dst"
