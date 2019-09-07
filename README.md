@@ -2,7 +2,7 @@
 
 A wall-clock based simple profiler.
 
-`wcprof` parses your go source then install timer to all top-level functions.
+`wcprof` parses your go source then install timer to all functions (except function literals).
 
 ## installation
 
@@ -43,5 +43,25 @@ wcprof.DefaultRegistry().Print()
 // to http.ResponseWriter
 func SomeHandler(w http.ResponseWriter, r *http.Request) {
 	wcprof.DefaultRegistry().Write(w)
+}
+```
+
+#### 3. Run application
+
+Run your application and collect stats.
+
+You can disable timer by environmental variable of calling `wcprof.Off()`.
+
+```
+WCPROF_OFF=1 go run your-app
+```
+
+or
+
+```go
+func main() {
+	wcprof.Off()
+	...
+	// your codes
 }
 ```
